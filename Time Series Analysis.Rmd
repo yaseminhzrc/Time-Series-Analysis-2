@@ -1,0 +1,327 @@
+---
+title: "Zaman Serisi Final"
+author: "Yasemin Hızarcı 121516005"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+**Veri setinize ilişkin zaman serisi grafiğini çizdiriniz ve veri setinizi tanıtınız.veri setinizi train ve test olarak ikiye ayırınız.**
+
+### **Veri setinin tanıtılması:**
+
+**Norveç’te Yeni Araba Satışları**
+
+2007-2017 için aylık otomobil satışları hakkında bilgi veren bir veri setidir.
+
+Norveç’teki otomobil satışlarının aylara göre özet istatistiklerini içerir.
+
+**Quantity(Miktar):** Satılan toplam birim sayısı
+
+**Quantity_YoY:** Birim cinsinden YY(bir önceki yılın aynı dönemine kıyasla) degişim
+
+**Import(ithalat):** İthal edilen toplam birim sayısı
+
+**Import_YoY:** Birim cinsinden geçen yıl aynı aya göre degişim.
+
+**Used:** Ülke içindeki birim sahibi değişikliklerinin toplam sayısı (2012 verileri mevcuttur)
+
+**Used_YoY:** Birim cinsinden YY degişim.
+
+**Avg_CO2:** Belirli bir ayda satılan tüm arabaların ortalama CO2 emisyonu (g / km cinsinden)
+
+**Bensin_Co2:** Belirli bir ayda satılan benzin yakıtlı arabaların ortalama CO2 emisyonu (g / km cinsinden)
+
+**Diesel_Co2:** Belirli bir ayda satılan dizel yakıtlı arabaların ortalama CO2 emisyonu (g / km olarak)
+
+**Quantity_Diesel:** Belirli bir ayda ülkede satılan dizel yakıtlı araba sayısı
+
+**Diesel_Share:** Dizel arabaların toplam satışlar içindeki payı (Miktar Dizel / Miktar)
+
+**Diesel_Share_LY:** Bir yıl önceki toplam satışlar içinde dizel arabaların payı
+
+**Quantity_Hybrid:** Ülkede satılan yeni hibrit otomobil sayısı (hem PHEV hem de BV)
+
+**Quantity_Electric:** Ükede satılan yeni elektrikli otomobil sayısı.
+
+**Import_Electric:** Ülkeye ithal edilen kullanılmış elektrikli otomobil sayısı.
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+carsales<-read.csv(file="C:/Users/yasem/OneDrive/Masaüstü/norwaycarsales.csv",
+header=TRUE,sep=",")
+head(carsales)
+```
+
+
+**veri, 2007 1. aydan 2017 1. aya kadar devam eden aylık bir veridir.**
+
+```{r}
+summary(carsales)
+
+```
+
+
+**Bu çalışmada "Quantity" (Satılan toplam birim sayısını belirten değişken) kullanılacaktır**
+
+### **Zaman Serisi Grafiği**
+
+"Quantity" değişkenini zaman serisi haline getiriyorum.
+
+```{r}
+Quantity <- ts(carsales$Quantity, start = c(2007,1), frequency = 12)
+Quantity
+```
+**Quantity değişkeni için zaman serisi grafiği:**
+
+```{r}
+autoplot(Quantity) +
+ggtitle("Norveç Araba Satışları ") +
+xlab("Zaman") +
+ylab("Araba Satışları")
+```
+
+Bu grafikten araba satışlarının 2009 a kadar düşüşte olduğu,2009 sonrasında ise artan bir trend gösterdiği görülüyor.Mevsimsellik ile ilgili belirgin bir durum söz konusu değildir.
+
+### Verinin Test ve Train olarak ayrılması:
+
+```{r}
+train<-window(Quantity,end=c(2014,12))#ilk 96 ayı train olarak aldım.
+test<-window(Quantity, start=c(2015,1)) #son 25 ayı test seti olarak aldım.
+
+```
+
+
+
+
+
+
+# **1. SORU**:
+
+Training setinizi lineer  regresyon,lineer spline ve kübik spline regresyon yaklaşımlarını kullanarak modelleyiniz.
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+
+#lineer regresyon modeli:
+
+fit.lin <- tslm(train ~ trend)
+
+#lineer spline model:
+
+t <- time(train)
+t.break1 <- 2009
+t.break2 <- 2013
+tb1 <- ts(pmax(0, t - t.break1), start = 2007)
+tb2 <- ts(pmax(0, t - t.break2), start = 2007)
+
+fit.pw <- tslm(train ~ t + tb1 + tb2)
+
+
+#cubic spline model:
+
+fit.spline <- tslm(train ~ t + I(t^2) + I(t^3)+
+  I(tb1^3) + I(tb2^3))
+
+
+```
+
+## a)
+
+**Modelleri AICc kriterine göre kıyaslayıp daha uygun olduğunu düşündüğünüz modeli belirleyiniz.**
+
+
+
+```{r}
+CV(fit.lin)
+CV(fit.pw)
+CV(fit.spline)
+
+```
+**AICc en küçük olan model en iyisidir.Buradan lineer spline modelin en iyisi olduğu görülmektedir.**
+
+
+## b)
+
+**Uygun bulduğunuz modeli kullanarak test setini tahmin ediniz ve tahminlere ilişkin RMSE değerini hesaplayınız**
+
+
+```{r}
+t.new <- t[length(t)] + seq(25)/12   # trainden sonraki 25 ay için
+tb1.new <- tb1[length(tb1)] + seq(25)/12
+tb2.new <- tb2[length(tb2)] + seq(25)/12
+
+newdata <- cbind(t=t.new, tb1=tb1.new, tb2=tb2.new) %>%
+  as.data.frame() 
+
+fcasts.pw <- forecast(fit.pw, newdata = newdata)   #lineer spline modeli ile trainden sonraki 25 ay tahmin ediliyor.
+
+accuracy(fcasts.pw,test) 
+
+```
+
+**RMSE** değeri **1692** bulunmuştur.
+
+## c)
+
+**Uygun bulduğunuz modelin hem training hem de test seti üzerindeki uyumunu gösteren zaman serisi grafiğini çizdiriniz.**
+
+
+```{r}
+autoplot(Quantity)+
+  autolayer(fitted(fit.pw), series = "Train linear spline")+  #train seti için trend 
+  autolayer(fcasts.pw, series="Test linear spline",PI=FALSE)+  #test seti için trend 
+  xlab("Year") + ylab("Araba satış miktarı") +ggtitle("Norveç araba satışları") +
+  guides(colour = guide_legend(title = " "))
+  
+```
+
+Model train seti üzerinde 2009 yılı için yeterince iyi değildir.2009 yılında gerçekte araba satışları daha düşüktür.
+
+Modelin test seti üzerindeki tahmini iyi değildir.Gerçekte test setinde araba satışları artan bir trend gösterirken modelin tahmininde azalan bir trend çizgisi tahmin edilmiştir.
+
+
+## d)
+
+**Hatalara ilişkin varsayımları kontrol ediniz.**
+
+
+```{r}
+checkresiduals(fit.pw)
+
+```
+
+
+İlk grafikte artıkların 0 etrafında dağılımının biraz düzensiz olduğu görülüyor.
+
+Histogramdan dağılımın normal dağılıma yakın olduğu görülüyor.
+
+ACF grafiğinde bazı dikey çizgiler mavi kesikli çizgi ile belirtilen sınırlar içinde değildir.Çizgilerin bu sınırları aşması otokorelasyon olduğunun kanıtıdır.Bu zaman serisi beyaz gürültü serisi değildir.
+
+
+
+
+# **2. SORU**
+
+## a)
+
+**Uygun hareketli ortalama(moving average) yöntemini seçip verinizin trend bileşenini belirleyiniz ve orijinal veri üzerinde grafikleyiniz.**
+
+```{r message=FALSE, warning=FALSE}
+autoplot(Quantity, series="Data") +
+autolayer(ma(Quantity, 12), series="12-MA") +
+xlab("Year") + ylab("Araba satış miktarı") +
+ggtitle("Norveç Araba Satışları") +
+scale_colour_manual(values=c("Data"="grey","12-MA"="red"),
+breaks=c("Data","12-MA"))
+
+```
+
+ma değeri aylık veriye uygun olarak alınmıştır.
+
+Gri çizgiler orijinal zaman serisidir.Kırmızı çizgiler ise hareketli ortalama yöntemiyle elde edilmiş trend çizgisidir.
+
+Kırmızı trend çizgisi ve orijinal veri incelendiğinde trend çizgisinin verinin trendini iyi bir şekilde gösterdiği görülüyor.
+
+## b)
+
+**Uygun STL ayrıştırması ile verinizi ayrıştırıp grafikleyiniz.**
+
+
+
+```{r}
+Quantity %>%
+stl(t.window=9, s.window="periodic", robust=TRUE) %>%
+autoplot()
+
+```
+
+t.window, trend bileşeni tahmin edilirken kullanılacak ardışık gözlemlerin sayısıdır ve 9 olarak alınmıştır.Mevsimsel bileşen ise periyodik(mevsimler boyu aynı olacak şekilde) alınmıştır.
+
+En üstte verinin zaman serisi grafiği mevcuttur.Trend grafiği ise bu zaman serisinin trendini uygun şekilde çizmiştir.
+
+Alt panelde gösterilen geri kalan bileşen, mevsimsel ve trend döngüsü
+bileşenleri veriden çıkarıldığında geriye kalan kısımdır.
+
+
+## c)
+
+**Verinizdeki trend ve mevsimsellik bileşenlerinin gücünü belirleyiniz.**
+
+
+### Trend:
+
+Güçlü bir trend gösteren veriler için, mevsimsellikten arındırılmış veriler, reminder bileşenden çok daha fazla varyasyona sahip olmalıdır. Bu nedenle Var((Rt))/Var((Tt + Rt)) nispeten küçük olmalıdır.
+
+
+
+```{r}
+a=Quantity %>%stl(t.window=9, s.window="periodic", robust=TRUE)
+
+seasonal <- a[["time.series"]][,1]
+trend<-a[["time.series"]][,2]
+remainder<-a[["time.series"]][,3]
+
+
+```
+
+```{r}
+max(0,1-(var(remainder)/(var(trend+remainder))))
+var(remainder)/(var(trend+remainder))
+```
+var(RT)/var(Tt+Rt) küçüktür.Bu da veride trendin güçlü olduğunu gösterir.
+
+### Mevsimsellik
+
+0’a yakın FS değerine sahip bir seri neredeyse hiç mevsimsellik göstermezken, güçlü mevsimselliğe sahip bir
+seride 1’e yakın FS değeri olacaktır.Çünkü Var(Rt), Var(St + Rt)’den çok daha küçük olacaktır.
+
+
+```{r}
+FS=max(0,1-(var(remainder)/(var(seasonal+remainder))))
+FS
+```
+FS değeri küçük olduğu için veride mevsimselliğin güçlü olmadığı sonucuna varılır.
+
+## d)
+
+**Training set üzerinde STL ayrıştırmasını kullanarak, test setinizi tahmin ediniz.Orijinal veri üzerine tahminlerinizi grafikleyip tahminlere ilişkin RMSE değerini hesaplayınız.**
+
+
+```{r message=FALSE, warning=FALSE}
+
+# STL ayrıştırması:
+
+fit <- stl(train, t.window=9, s.window="periodic",
+robust=TRUE)
+
+
+# Test setinin tahmin edilmesi:
+
+fcasts=forecast(fit,h=25)
+
+
+```
+
+```{r}
+
+autoplot(Quantity)+
+  autolayer(fcasts, series="Test seti tahminleri",PI=FALSE)+xlab("Year") +
+  ylab("Araba satış miktarı") +ggtitle("Norveç araba satışları") +
+  guides(colour = guide_legend(title = " "))
+```
+
+Kırmızı renkli çizgiler orijinal veri üzerine çizdirilmiş test seti tahminleridir.Sonlara doğru tahmin gücünün azaldığı görülmektedir.
+
+```{r}
+accuracy(fcasts,test)
+```
+
+
+Tahminlere ilişkin **RMSE** değeri **1118.115** tir.
+
